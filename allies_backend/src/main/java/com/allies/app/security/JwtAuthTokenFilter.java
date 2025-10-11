@@ -2,7 +2,6 @@ package com.allies.app.security;
 
 import java.io.IOException;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -10,7 +9,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.allies.app.service.AccountService;
+import com.allies.app.service.TaikhoanService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,12 +18,14 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class JwtAuthTokenFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private JwtUtils jwtUtils;
-
-    @Autowired
-    private AccountService accountService; // Sử dụng AccountService để tải UserDetails
-
+    private final JwtUtils jwtUtils;
+    private final TaikhoanService taikhoanService;
+    
+    public JwtAuthTokenFilter(JwtUtils jwtUtils, TaikhoanService taikhoanService) {
+        this.jwtUtils = jwtUtils;
+        this.taikhoanService = taikhoanService;
+    }
+    
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -36,7 +37,7 @@ public class JwtAuthTokenFilter extends OncePerRequestFilter {
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
-                UserDetails userDetails = accountService.loadUserByUsername(username);
+                UserDetails userDetails = taikhoanService.loadUserByUsername(username);
 
                 // 3. Tạo đối tượng xác thực và đặt vào SecurityContext
                 UsernamePasswordAuthenticationToken authentication =

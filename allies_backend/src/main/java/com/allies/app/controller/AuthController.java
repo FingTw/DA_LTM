@@ -1,75 +1,71 @@
 package com.allies.app.controller;
 
-import com.allies.app.model.Account;
-import com.allies.app.payload.request.LoginRequest;
-import com.allies.app.payload.request.SignupRequest;
-import com.allies.app.payload.response.JwtResponse;
-import com.allies.app.repository.AccountRepository;
-import com.allies.app.security.JwtUtils;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-@CrossOrigin(origins = "http://localhost:4200", maxAge = 3600) // Cho phép Angular Frontend
+import com.allies.app.model.Taikhoan;
+import com.allies.app.payload.request.LoginRequest;
+import com.allies.app.payload.request.SignupRequest;
+import com.allies.app.payload.response.JwtResponse;
+import com.allies.app.security.JwtUtils;
+import com.allies.app.service.TaikhoanService;
+
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class AuthController {
 
     @Autowired
-    AuthenticationManager authenticationManager; // Từ SecurityConfig
+    private AuthenticationManager authenticationManager;
 
     @Autowired
-    AccountRepository accountRepository; // Để kiểm tra username tồn tại và lưu user mới
+    private TaikhoanService taikhoanService;
 
     @Autowired
-    PasswordEncoder encoder; // Từ SecurityConfig (BCrypt)
+    private JwtUtils jwtUtils;
 
-    @Autowired
-    JwtUtils jwtUtils; // Để sinh token
-
-    // API Đăng nhập
-    @PostMapping("/signin")
+    @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
 
-        // 1. Xác thực người dùng (Spring Security sẽ gọi AccountService)
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = jwtUtils.generateJwtToken(authentication);
 
-        // 2. Đặt đối tượng xác thực vào Security Context
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        
-        // 3. Sinh JWT và trả về
-        String jwt = jwtUtils.generateJwtToken(authentication);
-        Account userDetails = (Account) authentication.getPrincipal(); // Lấy Account từ đối tượng xác thực
+            Taikhoan user = taikhoanService.getTaikhoanByTenDn(loginRequest.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return ResponseEntity.ok(new JwtResponse(jwt,userDetails.getId(),userDetails.getUsername(),
-                                                 null)); 
+            return ResponseEntity.ok(new JwtResponse(jwt, user.getMaTk(), user.getTenDn()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Invalid username or password");
+        }
     }
 
-    // API Đăng ký
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
-        
-        // Kiểm tra Username đã tồn tại chưa
-        if (accountRepository.findByUsername(signUpRequest.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Error: Username is already taken!");
+        try {
+            if (taikhoanService.getTaikhoanByTenDn(signUpRequest.getUsername()).isPresent()) {
+                return ResponseEntity.badRequest().body("Username is already taken!");
+            }
+
+            Taikhoan user = new Taikhoan();
+            user.setTenDn(signUpRequest.getUsername());
+            user.setMk(signUpRequest.getPassword());
+            user.setAvarta("default-avatar.png");
+
+            taikhoanService.createTaikhoan(user);
+
+            return ResponseEntity.ok("User registered successfully!");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
         }
-
-        // Tạo Account mới
-        Account account = new Account();
-        account.setUsername(signUpRequest.getUsername());
-        
-        // MÃ HÓA PASSWORD trước khi lưu vào DB
-        account.setPassword(encoder.encode(signUpRequest.getPassword())); 
-
-        accountRepository.save(account);
-
-        return ResponseEntity.ok("Account registered successfully!");
     }
 }

@@ -1,36 +1,31 @@
 package com.allies.app.security;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Component;
 
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.UnsupportedJwtException;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 
-@Component
 public class JwtUtils {
 
-    // Khóa bí mật JWT (Đọc từ application.properties)
-    @Value("${connectsphere.app.jwtSecret}")
-    private String jwtSecret;
+    // Khóa bí mật JWT
+    private final String jwtSecret = "mySecretKey123456789012345678901234567890123456789012345678901234567890";
 
-    // Thời gian hiệu lực của JWT (Đọc từ application.properties)
-    @Value("${connectsphere.app.jwtExpirationMs}")
-    private int jwtExpirationMs;
+    // Thời gian hiệu lực của JWT (24 giờ)
+    private final int jwtExpirationMs = 86400000;
 
     // Lấy Key bảo mật
     private Key key() {
-        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
-    }
+    return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+}
 
     // 1. Sinh JWT từ thông tin xác thực
     public String generateJwtToken(Authentication authentication) {
