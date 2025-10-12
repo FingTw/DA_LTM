@@ -3,15 +3,16 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { User, LoginRequest, SignupRequest, AuthResponse } from '../models/user.model';
+import { environment } from '../../environments/environment';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class AuthService {
-  private readonly API_URL = 'http://localhost:8080/api/auth';
+  private readonly API_URL = environment.apiUrl + '/auth';
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
-  
+
   public isAuthenticated = signal(false);
 
   constructor(private http: HttpClient) {
@@ -19,18 +20,17 @@ export class AuthService {
   }
 
   login(credentials: LoginRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.API_URL}/login`, credentials)
-      .pipe(
-        tap(response => {
-          this.setCurrentUser({
-            id: response.id,
-            username: response.username,
-            avatar: 'default-avatar.png'
-          });
-          localStorage.setItem('token', response.token);
-          this.isAuthenticated.set(true);
-        })
-      );
+    return this.http.post<AuthResponse>(`${this.API_URL}/login`, credentials).pipe(
+      tap((response) => {
+        this.setCurrentUser({
+          id: response.id,
+          username: response.username,
+          avatar: 'default-avatar.png',
+        });
+        localStorage.setItem('token', response.token);
+        this.isAuthenticated.set(true);
+      })
+    );
   }
 
   signup(userData: SignupRequest): Observable<any> {
@@ -59,7 +59,7 @@ export class AuthService {
       this.setCurrentUser({
         id: 1,
         username: 'user',
-        avatar: 'default-avatar.png'
+        avatar: 'default-avatar.png',
       });
       this.isAuthenticated.set(true);
     }

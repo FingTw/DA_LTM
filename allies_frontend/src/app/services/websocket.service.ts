@@ -2,33 +2,34 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ChatMessage } from '../models/chat.model';
 import { Call, CallData, CallAnswer } from '../models/call.model';
+import { environment } from '../../environments/environment';
 
 declare var SockJS: any;
 declare var Stomp: any;
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class WebSocketService {
   private stompClient: any;
   private isConnected = false;
-  
+
   private messagesSubject = new BehaviorSubject<ChatMessage | null>(null);
   public messages$ = this.messagesSubject.asObservable();
-  
+
   private callSubject = new BehaviorSubject<any>(null);
   public callEvents$ = this.callSubject.asObservable();
 
   connect(): void {
     if (this.isConnected) return;
 
-    const socket = new SockJS('http://localhost:8080/ws');
+    const socket = new SockJS(environment.apiUrl + '/ws');
     this.stompClient = Stomp.over(socket);
-    
+
     this.stompClient.connect({}, (frame: any) => {
       console.log('Connected: ' + frame);
       this.isConnected = true;
-      
+
       // Subscribe to public messages
       this.stompClient.subscribe('/topic/public', (message: any) => {
         const chatMessage: ChatMessage = JSON.parse(message.body);
@@ -86,7 +87,7 @@ export class WebSocketService {
         const chatMessage: ChatMessage = JSON.parse(message.body);
         this.messagesSubject.next(chatMessage);
       });
-      
+
       this.stompClient.subscribe(`/user/${username}/queue/call`, (message: any) => {
         const callEvent = JSON.parse(message.body);
         this.callSubject.next(callEvent);
