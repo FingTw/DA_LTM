@@ -3,19 +3,17 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject } from 'rxjs';
 import { ChatMessage, ChatRoom } from '../models/chat.model';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ChatService {
-  private readonly API_URL = 'http://localhost:8080/api/chat';
+  private readonly API_URL = environment.apiUrl + '/chat';
   private messagesSubject = new BehaviorSubject<ChatMessage[]>([]);
   public messages$ = this.messagesSubject.asObservable();
 
-  constructor(
-    private http: HttpClient,
-    private authService: AuthService
-  ) {}
+  constructor(private http: HttpClient, private authService: AuthService) {}
 
   getMessages(userId: number): Observable<ChatMessage[]> {
     return this.http.get<ChatMessage[]>(`${this.API_URL}/messages/${userId}`);
