@@ -1,0 +1,46 @@
+<div class="video-container" *ngIf="isCallActive()">
+  <div class="video-grid" [class.single-participant]="!remotePeerConnected()">
+    <!-- Remote Video -->
+    <div class="video-wrapper">
+      <video #remoteVideo class="video-stream" autoplay playsinline></video>
+      <div class="participant-overlay"></div>
+      <div class="participant-info">
+        {{ callInfo()?.receiverUsername || 'Connecting...' }}
+      </div>
+      <div class="status-badge" [class]="connectionStatusClass()">
+        {{ connectionStatus() }}
+      </div>
+    </div>
+    <!-- Local Video -->
+    <div class="local-video">
+      <video #localVideo autoplay playsinline muted></video>
+    </div>
+  </div>
+  <!-- Call Controls -->
+  <div class="controls-bar">
+    <button class="control-button" [class.active]="isMuted()" (click)="toggleMute()">
+      <span class="material-icons">{{ isMuted() ? 'mic_off' : 'mic' }}</span>
+    </button>
+    <button class="control-button" [class.active]="isVideoOff()" (click)="toggleVideo()">
+      <span class="material-icons">{{ isVideoOff() ? 'videocam_off' : 'videocam' }}</span>
+    </button>
+    <button class="control-button" [class.active]="isScreenSharing()" (click)="toggleScreenShare()">
+      <span class="material-icons">{{
+        isScreenSharing() ? 'stop_screen_share' : 'screen_share'
+      }}</span>
+    </button>
+    <button class="control-button end-call" (click)="endCall()">
+      <span class="material-icons">call_end</span>
+    </button>
+    <span class="call-duration">{{ getCallDuration() }}</span>
+  </div>
+</div>
+<div class="incoming-call-dialog" *ngIf="incomingCall()">
+  <div class="dialog-content">
+    <h3>Incoming call from {{ incomingCall()?.callerUsername }}</h3>
+    <div class="dialog-actions">
+      <button class="accept-button" (click)="answerCall()">Accept</button>
+      <button class="decline-button" (click)="rejectCall()">Decline</button>
+    </div>
+  </div>
+</div>

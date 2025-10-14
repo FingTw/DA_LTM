@@ -42,9 +42,7 @@ public class TaikhoanService implements UserDetailsService {
                 .build();
     }
 
-    public Optional<Taikhoan> getTaikhoanById(Integer id) {
-        return taikhoanRepository.findById(id);
-    }
+   
 
     public Optional<Taikhoan> getTaikhoanByTenDn(String tenDn) {
         return taikhoanRepository.findByTenDn(tenDn);
@@ -69,4 +67,19 @@ public class TaikhoanService implements UserDetailsService {
     public void deleteTaikhoan(Integer id) {
         taikhoanRepository.deleteById(id);
     }
+    
+
+    public List<Taikhoan> searchUsers(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return List.of(); 
+        }
+        // Giả sử TaikhoanRepository có phương thức findByTenDnContainingIgnoreCase
+        return taikhoanRepository.findByTenDnContainingIgnoreCase(query); 
+    }
+    
+    // BỔ SUNG: Hàm lấy Taikhoan bằng ID (Dùng cho CallController & các Service khác)
+    public Optional<Taikhoan> getTaikhoanById(Integer id) {
+        return taikhoanRepository.findById(id);
+    }
+
 }

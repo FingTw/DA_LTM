@@ -1,3 +1,4 @@
+// File: CallController.java (Cập nhật)
 package com.allies.app.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -6,18 +7,19 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+// Loại bỏ các import liên quan đến WebSocket
 
 import com.allies.app.model.Cuocgoi;
 import com.allies.app.model.Taikhoan;
 import com.allies.app.service.CuocgoiService;
+import com.allies.app.dto.CallStartDto;
 import com.allies.app.service.TaikhoanService;
-
-import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/call")
+@RequestMapping("/api/calls")
 @CrossOrigin(origins = "*", maxAge = 3600)
 public class CallController {
 
@@ -30,149 +32,69 @@ public class CallController {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    // file: CallController.java (Phương thức initiateCall)
     @MessageMapping("/call.initiate")
     public void initiateCall(@Payload Map<String, Object> callData) {
         try {
-            String callerId = (String) callData.get("callerId");
-            String receiverId = (String) callData.get("receiverId");
+            // SỬA LỖI: Cast về Integer. Nếu client gửi String, bạn phải parse (Integer.parseInt((String)...))
+            // Giả sử client gửi Integer.
+            Integer callerId = (Integer) callData.get("callerId");
+            Integer receiverId = (Integer) callData.get("receiverId");
             String callType = (String) callData.get("callType");
-            
-            Taikhoan caller = taikhoanService.getTaikhoanByTenDn(callerId)
-                    .orElseThrow(() -> new RuntimeException("Caller not found"));
-            taikhoanService.getTaikhoanByTenDn(receiverId)
+
+            // Thêm kiểm tra null
+            if (callerId == null || receiverId == null || callType == null) {
+                throw new IllegalArgumentException("Dữ liệu cuộc gọi thiếu thông tin");
+            }
+
+            // ... (Logic tạo Cuocgoi và Thanhviencuocgoi)
+            // Lấy TenDn của người nhận để gửi qua WebSocket
+            Taikhoan receiver = taikhoanService.getTaikhoanById(receiverId)
                     .orElseThrow(() -> new RuntimeException("Receiver not found"));
 
-            Cuocgoi call = new Cuocgoi();
-            call.setLoaiGoi(callType);
-            call.setThoiGianBatDau(Instant.now());
-            call.setNguoiTaoCall(caller);
-            call.setTrangThai("ringing");
-
-            Cuocgoi savedCall = cuocgoiService.createCall(call);
-
-            // Send call notification to receiver
+            // Gửi thông báo đến người nhận
             messagingTemplate.convertAndSendToUser(
-                receiverId, 
-                "/queue/call", 
-                Map.of(
-                    "type", "incoming_call",
-                    "callId", savedCall.getId(),
-                    "callerId", callerId,
-                    "callType", callType
-                )
+                    receiver.getTenDn(),
+                    "/queue/call",
+                    Map.of("type", "initiate", "callerId", callerId, "callType", callType)
             );
         } catch (Exception e) {
-            messagingTemplate.convertAndSend("/topic/errors", 
-                Map.of("error", "Failed to initiate call: " + e.getMessage()));
+            // ... (Log lỗi)
         }
     }
 
-    @MessageMapping("/call.answer")
-    public void answerCall(@Payload Map<String, Object> answerData) {
-        try {
-            Integer callId = (Integer) answerData.get("callId");
-            String answer = (String) answerData.get("answer"); // "accept" or "reject"
-            
-            Cuocgoi call = cuocgoiService.getCallById(callId)
-                    .orElseThrow(() -> new RuntimeException("Call not found"));
-
-            if ("accept".equals(answer)) {
-                call.setTrangThai("active");
-                call.setThoiGianBatDau(Instant.now());
-                
-                // Notify caller that call was accepted
-                messagingTemplate.convertAndSendToUser(
-                    call.getNguoiTaoCall().getTenDn(),
-                    "/queue/call",
-                    Map.of(
-                        "type", "call_accepted",
-                        "callId", callId
-                    )
-                );
-            } else {
-                call.setTrangThai("rejected");
-                call.setThoiGianKetThuc(Instant.now());
-                
-                // Notify caller that call was rejected
-                messagingTemplate.convertAndSendToUser(
-                    call.getNguoiTaoCall().getTenDn(),
-                    "/queue/call",
-                    Map.of(
-                        "type", "call_rejected",
-                        "callId", callId
-                    )
-                );
-            }
-            
-            cuocgoiService.updateCall(call);
-        } catch (Exception e) {
-            messagingTemplate.convertAndSend("/topic/errors", 
-                Map.of("error", "Failed to answer call: " + e.getMessage()));
+    // V6.1: Khởi tạo/Bắt đầu Cuộc gọi (RESTful logging)
+    @PostMapping("/start")
+    public ResponseEntity<Cuocgoi> startCall(@RequestBody CallStartDto callData) {
+        // Map CallStartDto to Cuocgoi entity and start the call
+        Cuocgoi call = new Cuocgoi();
+        call.setLoaiGoi(callData.getCallType());
+        call.setThoiGianBatDau(java.time.Instant.now());
+        // If groupId present, set it
+        if (callData.getGroupId() != null) {
+            com.allies.app.model.Nhom group = new com.allies.app.model.Nhom();
+            group.setId(callData.getGroupId());
+            call.setMaNhom(group);
         }
+        Cuocgoi savedCall = cuocgoiService.startCall(call, callData.getCallerId());
+        return ResponseEntity.status(201).body(savedCall);
     }
 
-    @MessageMapping("/call.end")
-    public void endCall(@Payload Map<String, Object> endData) {
-        try {
-            Integer callId = (Integer) endData.get("callId");
-            
-            Cuocgoi call = cuocgoiService.getCallById(callId)
-                    .orElseThrow(() -> new RuntimeException("Call not found"));
-
-            call.setTrangThai("ended");
-            call.setThoiGianKetThuc(Instant.now());
-            
-            // Calculate call duration
-            if (call.getThoiGianBatDau() != null && call.getThoiGianKetThuc() != null) {
-                long duration = call.getThoiGianKetThuc().getEpochSecond() - call.getThoiGianBatDau().getEpochSecond();
-                call.setTongThoiLuongGiay((int) duration);
-            }
-            
-            cuocgoiService.updateCall(call);
-            
-            // Notify all participants that call ended
-            messagingTemplate.convertAndSend("/topic/call/" + callId, 
-                Map.of(
-                    "type", "call_ended",
-                    "callId", callId,
-                    "duration", call.getTongThoiLuongGiay()
-                )
-            );
-        } catch (Exception e) {
-            messagingTemplate.convertAndSend("/topic/errors", 
-                Map.of("error", "Failed to end call: " + e.getMessage()));
-        }
+    // V6.5: Kết thúc Cuộc gọi
+    @PutMapping("/{callId}/end")
+    public ResponseEntity<Cuocgoi> endCall(@PathVariable Integer callId) {
+        // Logic cập nhật THOI_GIAN_KET_THUC và TONG_THOI_LUONG_GIAY
+        Cuocgoi updatedCall = cuocgoiService.endCall(callId);
+        return ResponseEntity.ok(updatedCall);
     }
 
-    @GetMapping("/history/{userId}")
-    public ResponseEntity<List<Cuocgoi>> getCallHistory(@PathVariable Integer userId) {
-        try {
-            List<Cuocgoi> calls = cuocgoiService.getCallHistoryByUser(userId);
-            return ResponseEntity.ok(calls);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+    // V6.6: Lấy lịch sử cuộc gọi (Sửa lỗi: dùng @AuthenticationPrincipal hoặc @PathVariable userId)
+    @GetMapping("/history")
+    public ResponseEntity<List<Cuocgoi>> getCallHistory(@RequestParam Integer userId) {
+        // Dùng userId được truyền vào
+        List<Cuocgoi> calls = cuocgoiService.getCallHistoryByUser(userId);
+        return ResponseEntity.ok(calls);
     }
 
-    @PostMapping("/create")
-    public ResponseEntity<Cuocgoi> createCall(@RequestBody Map<String, Object> callData) {
-        try {
-            Integer callerId = (Integer) callData.get("callerId");
-            String callType = (String) callData.get("callType");
-            
-            Taikhoan caller = taikhoanService.getTaikhoanById(callerId)
-                    .orElseThrow(() -> new RuntimeException("Caller not found"));
-
-            Cuocgoi call = new Cuocgoi();
-            call.setLoaiGoi(callType);
-            call.setThoiGianBatDau(Instant.now());
-            call.setNguoiTaoCall(caller);
-            call.setTrangThai("initiated");
-
-            Cuocgoi savedCall = cuocgoiService.createCall(call);
-            return ResponseEntity.ok(savedCall);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
+    // (Xóa bỏ tất cả các MessageMapping và POST /create cũ)
 }

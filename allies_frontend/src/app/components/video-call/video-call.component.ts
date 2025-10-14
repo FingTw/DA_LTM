@@ -1,416 +1,62 @@
 import { Component, OnInit, OnDestroy, signal, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { WebSocketService } from '../../services/websocket.service';
 import { AuthService } from '../../services/auth.service';
-import { Call, CallData, CallAnswer } from '../../models/call.model';
+import { Call, CallEvent, CallAnswer } from '../../models/call.model';
 
 @Component({
   selector: 'app-video-call',
   standalone: true,
   imports: [CommonModule],
-  template: `
-    <div class="fixed inset-0 bg-black z-50" *ngIf="isCallActive()">
-      <div class="flex h-full">
-        <!-- Video Area -->
-        <div class="flex-1 relative">
-          <!-- Remote Video -->
-          <video
-            #remoteVideo
-            class="w-full h-full object-cover"
-            autoplay
-            playsinline
-          ></video>
-          
-          <!-- Local Video -->
-          <div class="absolute top-4 right-4 w-64 h-48 bg-gray-800 rounded-lg overflow-hidden">
-            <video
-              #localVideo
-              class="w-full h-full object-cover"
-              autoplay
-              playsinline
-              muted
-            ></video>
-          </div>
-          
-          <!-- Call Info -->
-          <div class="absolute top-4 left-4 text-white">
-            <h3 class="text-xl font-semibold">{{ callInfo()?.callerId || 'Calling...' }}</h3>
-            <p class="text-sm opacity-75">{{ getCallDuration() }}</p>
-          </div>
-        </div>
-        
-        <!-- Controls -->
-        <div class="absolute bottom-8 left-half transform translate-x-negative-half flex space-x-4">
-          <!-- Mute Button -->
-          <button
-            (click)="toggleMute()"
-            class="w-12 h-12 rounded-full flex items-center justify-center"
-            [class.bg-gray-600]="!isMuted()"
-            [class.bg-red-600]="isMuted()"
-          >
-            <span class="material-icons text-white">
-              {{ isMuted() ? 'mic_off' : 'mic' }}
-            </span>
-          </button>
-          
-          <!-- Video Toggle -->
-          <button
-            (click)="toggleVideo()"
-            class="w-12 h-12 rounded-full flex items-center justify-center"
-            [class.bg-gray-600]="!isVideoOff()"
-            [class.bg-red-600]="isVideoOff()"
-          >
-            <span class="material-icons text-white">
-              {{ isVideoOff() ? 'videocam_off' : 'videocam' }}
-            </span>
-          </button>
-          
-          <!-- End Call -->
-          <button
-            (click)="endCall()"
-            class="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center"
-          >
-            <span class="material-icons text-white">call_end</span>
-          </button>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Incoming Call Modal -->
-    <div class="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center" *ngIf="incomingCall()">
-      <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-        <div class="text-center">
-          <div class="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-            <span class="material-icons text-white text-3xl">person</span>
-          </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-2">Incoming Call</h3>
-          <p class="text-gray-600 mb-6">{{ incomingCall()?.callerId }}</p>
-          
-          <div class="flex space-x-4 justify-center">
-            <button
-              (click)="answerCall(false)"
-              class="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center"
-            >
-              <span class="material-icons text-white">call_end</span>
-            </button>
-            <button
-              (click)="answerCall(true)"
-              class="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center"
-            >
-              <span class="material-icons text-white">call</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Call Controls in Chat -->
-    <div class="flex items-center space-x-2" *ngIf="!isCallActive() && !incomingCall()">
-      <button
-        (click)="startVideoCall()"
-        class="btn btn-primary btn-sm"
-        title="Start Video Call"
-      >
-        <span class="material-icons">videocam</span>
-        Video Call
-      </button>
-      <button
-        (click)="startVoiceCall()"
-        class="btn btn-secondary btn-sm"
-        title="Start Voice Call"
-      >
-        <span class="material-icons">phone</span>
-        Voice Call
-      </button>
-    </div>
-  `,
-  styles: [`
-    .fixed {
-      position: fixed;
-    }
-    
-    .inset-0 {
-      top: 0;
-      right: 0;
-      bottom: 0;
-      left: 0;
-    }
-    
-    .z-50 {
-      z-index: 50;
-    }
-    
-    .z-40 {
-      z-index: 40;
-    }
-    
-    .flex {
-      display: flex;
-    }
-    
-    .flex-1 {
-      flex: 1 1 0%;
-    }
-    
-    .h-full {
-      height: 100%;
-    }
-    
-    .relative {
-      position: relative;
-    }
-    
-    .absolute {
-      position: absolute;
-    }
-    
-    .w-full {
-      width: 100%;
-    }
-    
-    .h-full {
-      height: 100%;
-    }
-    
-    .w-64 {
-      width: 16rem;
-    }
-    
-    .h-48 {
-      height: 12rem;
-    }
-    
-    .w-12 {
-      width: 3rem;
-    }
-    
-    .h-12 {
-      height: 3rem;
-    }
-    
-    .w-20 {
-      width: 5rem;
-    }
-    
-    .h-20 {
-      height: 5rem;
-    }
-    
-    .max-w-md {
-      max-width: 28rem;
-    }
-    
-    .mx-4 {
-      margin-left: 1rem;
-      margin-right: 1rem;
-    }
-    
-    .mx-auto {
-      margin-left: auto;
-      margin-right: auto;
-    }
-    
-    .mb-2 {
-      margin-bottom: 0.5rem;
-    }
-    
-    .mb-4 {
-      margin-bottom: 1rem;
-    }
-    
-    .mb-6 {
-      margin-bottom: 1.5rem;
-    }
-    
-    .mt-4 {
-      margin-top: 1rem;
-    }
-    
-    .top-4 {
-      top: 1rem;
-    }
-    
-    .right-4 {
-      right: 1rem;
-    }
-    
-    .left-4 {
-      left: 1rem;
-    }
-    
-    .bottom-8 {
-      bottom: 2rem;
-    }
-    
-    .left-half {
-      left: 50%;
-    }
-    
-    .transform {
-      transform: translateX(-50%);
-    }
-    
-    .translate-x-negative-half {
-      transform: translateX(-50%);
-    }
-    
-    .space-x-4 > * + * {
-      margin-left: 1rem;
-    }
-    
-    .space-x-2 > * + * {
-      margin-left: 0.5rem;
-    }
-    
-    .items-center {
-      align-items: center;
-    }
-    
-    .justify-center {
-      justify-content: center;
-    }
-    
-    .justify-between {
-      justify-content: space-between;
-    }
-    
-    .text-center {
-      text-align: center;
-    }
-    
-    .text-white {
-      color: white;
-    }
-    
-    .text-gray-900 {
-      color: var(--gray-900);
-    }
-    
-    .text-gray-600 {
-      color: var(--gray-600);
-    }
-    
-    .bg-black {
-      background-color: black;
-    }
-    
-    .bg-gray-800 {
-      background-color: var(--gray-800);
-    }
-    
-    .bg-gray-600 {
-      background-color: var(--gray-600);
-    }
-    
-    .bg-red-600 {
-      background-color: #dc2626;
-    }
-    
-    .bg-green-600 {
-      background-color: #16a34a;
-    }
-    
-    .bg-white {
-      background-color: white;
-    }
-    
-    .bg-primary {
-      background-color: var(--primary-color);
-    }
-    
-    .bg-opacity-50 {
-      background-color: rgba(0, 0, 0, 0.5);
-    }
-    
-    .rounded-lg {
-      border-radius: 0.5rem;
-    }
-    
-    .rounded-full {
-      border-radius: 50%;
-    }
-    
-    .overflow-hidden {
-      overflow: hidden;
-    }
-    
-    .object-cover {
-      object-fit: cover;
-    }
-    
-    .text-xl {
-      font-size: 1.25rem;
-      line-height: 1.75rem;
-    }
-    
-    .text-sm {
-      font-size: 0.875rem;
-      line-height: 1.25rem;
-    }
-    
-    .text-3xl {
-      font-size: 1.875rem;
-      line-height: 2.25rem;
-    }
-    
-    .font-semibold {
-      font-weight: 600;
-    }
-    
-    .opacity-75 {
-      opacity: 0.75;
-    }
-    
-    .cursor-pointer {
-      cursor: pointer;
-    }
-    
-    .hover\\:bg-gray-50:hover {
-      background-color: var(--gray-50);
-    }
-  `]
+  styleUrls: ['./video-call.component.css'],
+  templateUrl: './video-call.component.html',
 })
 export class VideoCallComponent implements OnInit, OnDestroy {
+  readonly callInfo = signal<Call | null>(null);
+  readonly incomingCall = signal<Call | null>(null);
+  readonly isCallActive = signal(false);
+  readonly isMuted = signal(false);
+  readonly isVideoOff = signal(false);
+  readonly isScreenSharing = signal(false);
+  readonly remotePeerConnected = signal(false);
+  readonly connectionStatus = signal<'connecting' | 'connected' | 'disconnected'>('disconnected');
+  readonly callStartTime = signal<Date | null>(null);
+
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
   @ViewChild('remoteVideo') remoteVideo!: ElementRef<HTMLVideoElement>;
 
-  isCallActive = signal(false);
-  isMuted = signal(false);
-  isVideoOff = signal(false);
-  incomingCall = signal<any>(null);
-  callInfo = signal<CallData | null>(null);
-  callStartTime = signal<Date | null>(null);
-  
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
+  private screenStream: MediaStream | null = null;
   private peerConnection: RTCPeerConnection | null = null;
+  private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private webSocketService: WebSocketService,
-    private authService: AuthService
-  ) {}
+  constructor(private webSocketService: WebSocketService, private authService: AuthService) {}
 
   ngOnInit(): void {
     this.subscribeToCallEvents();
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     this.endCall();
   }
 
-  subscribeToCallEvents(): void {
-    this.webSocketService.callEvents$.subscribe(event => {
+  private subscribeToCallEvents(): void {
+    this.webSocketService.callEvents$.pipe(takeUntil(this.destroy$)).subscribe((event) => {
       if (event) {
         switch (event.type) {
           case 'incoming_call':
-            this.incomingCall.set(event);
+            const call = this.mapCallEventToCall(event);
+            this.handleIncomingCall(call);
             break;
           case 'call_accepted':
             this.startCall();
             break;
           case 'call_rejected':
-            this.endCall();
-            break;
           case 'call_ended':
             this.endCall();
             break;
@@ -419,78 +65,293 @@ export class VideoCallComponent implements OnInit, OnDestroy {
     });
   }
 
-  startVideoCall(): void {
-    const currentUser = this.authService.getCurrentUser();
-    if (!currentUser) return;
-
-    const callData: CallData = {
-      callerId: currentUser.username,
-      receiverId: 'receiver', // This should come from the selected chat
-      callType: 'video'
+  private mapCallEventToCall(event: CallEvent): Call {
+    return {
+      callId: event.id,
+      callerUsername: event.caller,
+      receiverUsername: event.callee,
+      callType: event.sdp?.type === 'offer' ? 'video' : 'audio', // Infer callType; adjust if backend provides it
+      status: event.status,
+      startTime: event.startTime || new Date(),
+      endTime: event.endTime,
+      sdp: event.sdp,
     };
+  }
 
-    this.callInfo.set(callData);
-    this.webSocketService.initiateCall(callData);
+  private async handleIncomingCall(call: Call): Promise<void> {
+    this.incomingCall.set(call);
+    this.callInfo.set(call);
+  }
+
+  private async createPeerConnection(): Promise<void> {
+    try {
+      this.peerConnection = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+
+      this.peerConnection.onicecandidate = ({ candidate }) => {
+        if (candidate && this.callInfo()) {
+          this.webSocketService.send('iceCandidate', {
+            callId: this.callInfo()!.callId,
+            candidate,
+          });
+        }
+      };
+
+      this.peerConnection.ontrack = ({ streams }) => {
+        this.remoteStream = streams[0];
+        if (this.remoteVideo?.nativeElement) {
+          this.remoteVideo.nativeElement.srcObject = this.remoteStream;
+        }
+        this.remotePeerConnected.set(true);
+        this.connectionStatus.set('connected');
+      };
+
+      this.peerConnection.oniceconnectionstatechange = () => {
+        switch (this.peerConnection?.iceConnectionState) {
+          case 'disconnected':
+          case 'failed':
+            this.connectionStatus.set('disconnected');
+            break;
+          case 'checking':
+            this.connectionStatus.set('connecting');
+            break;
+          case 'connected':
+            this.connectionStatus.set('connected');
+            break;
+        }
+      };
+
+      if (this.localStream) {
+        this.localStream.getTracks().forEach((track) => {
+          this.peerConnection?.addTrack(track, this.localStream!);
+        });
+      }
+    } catch (error) {
+      console.error('Error creating peer connection:', error);
+      throw error;
+    }
+  }
+
+  private async setupLocalMedia(constraints: MediaStreamConstraints): Promise<void> {
+    try {
+      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (this.localVideo?.nativeElement) {
+        this.localVideo.nativeElement.srcObject = this.localStream;
+      }
+    } catch (error) {
+      console.error('Error setting up local media:', error);
+      throw error;
+    }
+  }
+
+  startVideoCall(): void {
+    this.initiateCall('video');
   }
 
   startVoiceCall(): void {
+    this.initiateCall('audio');
+  }
+
+  private initiateCall(type: 'audio' | 'video'): void {
     const currentUser = this.authService.getCurrentUser();
     if (!currentUser) return;
 
-    const callData: CallData = {
-      callerId: currentUser.username,
-      receiverId: 'receiver', // This should come from the selected chat
-      callType: 'voice'
+    const call: Call = {
+      callId: Date.now().toString(),
+      callerUsername: currentUser.username,
+      receiverUsername: 'receiver', // Should come from selected chat
+      callType: type,
+      status: 'ringing',
+      startTime: new Date(),
     };
 
-    this.callInfo.set(callData);
-    this.webSocketService.initiateCall(callData);
+    this.callInfo.set(call);
+    this.webSocketService.send('initiateCall', call);
   }
 
-  async startCall(): Promise<void> {
+  async startCall(type?: 'audio' | 'video'): Promise<void> {
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+      await this.setupLocalMedia({
+        video: type === 'audio' ? false : true,
+        audio: true,
       });
-      
-      if (this.localVideo) {
-        this.localVideo.nativeElement.srcObject = this.localStream;
-      }
-      
+
+      await this.createPeerConnection();
+
+      const offer = await this.peerConnection!.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: type === 'video',
+      });
+
+      await this.peerConnection!.setLocalDescription(offer);
+
+      const call = this.callInfo();
+      if (!call) return;
+
+      this.webSocketService.send('offer', {
+        ...call,
+        sdp: offer,
+      });
+
+      this.isCallActive.set(true);
+      this.callStartTime.set(new Date());
+    } catch (error) {
+      console.error('Error starting call:', error);
+      this.cleanupCall();
+    }
+  }
+
+  async answerCall(): Promise<void> {
+    if (!this.incomingCall()) return;
+
+    try {
+      const call = this.incomingCall()!;
+
+      await this.setupLocalMedia({
+        video: call.callType === 'video',
+        audio: true,
+      });
+
+      await this.createPeerConnection();
+
+      await this.peerConnection!.setRemoteDescription(new RTCSessionDescription(call.sdp!));
+
+      const answer = await this.peerConnection!.createAnswer();
+      await this.peerConnection!.setLocalDescription(answer);
+
+      this.webSocketService.send('answer', {
+        ...call,
+        sdp: answer,
+      });
+
       this.isCallActive.set(true);
       this.callStartTime.set(new Date());
       this.incomingCall.set(null);
     } catch (error) {
-      console.error('Error accessing media devices:', error);
+      console.error('Error answering call:', error);
+      this.rejectCall();
     }
   }
 
-  answerCall(accept: boolean): void {
+  rejectCall(): void {
     if (!this.incomingCall()) return;
 
-    const answer: CallAnswer = {
-      callId: this.incomingCall().callId,
-      answer: accept ? 'accept' : 'reject'
-    };
+    this.webSocketService.send('reject', {
+      ...this.incomingCall()!,
+      status: 'rejected',
+    });
 
-    this.webSocketService.answerCall(answer);
-    
-    if (accept) {
-      this.startCall();
-    } else {
-      this.incomingCall.set(null);
+    this.incomingCall.set(null);
+  }
+
+  async toggleMute(): Promise<void> {
+    if (!this.localStream) return;
+
+    const audioTracks = this.localStream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      audioTracks.forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      this.isMuted.set(!audioTracks[0].enabled);
+    }
+  }
+
+  async toggleVideo(): Promise<void> {
+    if (!this.localStream) return;
+
+    const videoTracks = this.localStream.getVideoTracks();
+    if (videoTracks.length > 0) {
+      videoTracks.forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      this.isVideoOff.set(!videoTracks[0].enabled);
+    }
+  }
+
+  async toggleScreenShare(): Promise<void> {
+    try {
+      if (this.isScreenSharing()) {
+        await this.stopScreenSharing();
+      } else {
+        await this.startScreenSharing();
+      }
+    } catch (error) {
+      console.error('Error toggling screen share:', error);
+    }
+  }
+
+  private async startScreenSharing(): Promise<void> {
+    try {
+      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+
+      const videoTrack = this.screenStream.getVideoTracks()[0];
+
+      if (this.peerConnection) {
+        const sender = this.peerConnection.getSenders().find((s) => s.track?.kind === 'video');
+
+        if (sender) {
+          await sender.replaceTrack(videoTrack);
+        }
+      }
+
+      videoTrack.onended = () => {
+        this.stopScreenSharing();
+      };
+
+      this.isScreenSharing.set(true);
+    } catch (error) {
+      console.error('Error starting screen share:', error);
+      this.isScreenSharing.set(false);
+    }
+  }
+
+  private async stopScreenSharing(): Promise<void> {
+    if (!this.screenStream || !this.localStream || !this.peerConnection) return;
+
+    try {
+      const videoTrack = this.localStream.getVideoTracks()[0];
+      const sender = this.peerConnection.getSenders().find((s) => s.track?.kind === 'video');
+
+      if (sender && videoTrack) {
+        await sender.replaceTrack(videoTrack);
+      }
+
+      this.screenStream.getTracks().forEach((track) => track.stop());
+      this.screenStream = null;
+      this.isScreenSharing.set(false);
+    } catch (error) {
+      console.error('Error stopping screen share:', error);
     }
   }
 
   endCall(): void {
+    if (this.callInfo()) {
+      this.webSocketService.send('end', {
+        ...this.callInfo()!,
+        status: 'ended',
+        endTime: new Date(),
+      });
+    }
+
+    this.cleanupCall();
+  }
+
+  private cleanupCall(): void {
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
     }
 
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach((track) => track.stop());
+      this.screenStream = null;
+    }
+
     if (this.remoteStream) {
-      this.remoteStream.getTracks().forEach(track => track.stop());
+      this.remoteStream.getTracks().forEach((track) => track.stop());
       this.remoteStream = null;
     }
 
@@ -500,39 +361,28 @@ export class VideoCallComponent implements OnInit, OnDestroy {
     }
 
     this.isCallActive.set(false);
-    this.incomingCall.set(null);
+    this.isMuted.set(false);
+    this.isVideoOff.set(false);
+    this.isScreenSharing.set(false);
+    this.remotePeerConnected.set(false);
+    this.connectionStatus.set('disconnected');
     this.callInfo.set(null);
+    this.incomingCall.set(null);
     this.callStartTime.set(null);
-  }
-
-  toggleMute(): void {
-    if (this.localStream) {
-      const audioTrack = this.localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        this.isMuted.set(!audioTrack.enabled);
-      }
-    }
-  }
-
-  toggleVideo(): void {
-    if (this.localStream) {
-      const videoTrack = this.localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        this.isVideoOff.set(!videoTrack.enabled);
-      }
-    }
   }
 
   getCallDuration(): string {
     if (!this.callStartTime()) return '00:00';
-    
+
     const now = new Date();
     const duration = Math.floor((now.getTime() - this.callStartTime()!.getTime()) / 1000);
     const minutes = Math.floor(duration / 60);
     const seconds = duration % 60;
-    
+
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  connectionStatusClass(): string {
+    return `status-${this.connectionStatus()}`;
   }
 }

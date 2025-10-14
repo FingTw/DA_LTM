@@ -4,64 +4,75 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { LoginRequest } from '../../models/user.model';
+import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  styleUrls: ['./login.component.css'],
   template: `
-    <div class="min-h-screen flex items-center justify-center bg-gray-900">
-      <div class="max-w-xl w-full space-y-8 p-6 bg-gray-800 rounded-lg shadow-lg mx-auto">
-        <div class="text-center">
-          <h2 class="text-3xl font-bold text-white mb-2">Welcome to Allies</h2>
-          <p class="text-gray-200">Sign in to your account</p>
+    <div class="login-container">
+      <div class="login-card">
+        <div class="brand-title">
+          <img src="/assets/logo.svg" alt="Allies Logo" class="mx-auto h-12 mb-4" />
+          <h1>Welcome to Allies</h1>
+          <p class="text-sm text-gray-300">Connect with friends and colleagues</p>
         </div>
 
-        <div class="card">
-          <form (ngSubmit)="onSubmit()" class="space-y-6">
-            <div class="form-group">
-              <label for="username" class="form-label text-white">Username</label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                [(ngModel)]="loginForm.username"
-                required
-                class="form-input w-full"
-                placeholder="Enter your username"
-              />
-            </div>
+        <form (ngSubmit)="onSubmit()" class="space-y-6 mt-8">
+          <div class="form-group">
+            <label for="username" class="form-label">Username</label>
+            <input
+              id="username"
+              name="username"
+              type="text"
+              [(ngModel)]="loginForm.username"
+              required
+              class="form-input"
+              placeholder="Enter your username"
+              [class.error]="submitted && !loginForm.username"
+            />
+          </div>
 
-            <div class="form-group">
-              <label for="password" class="form-label text-white">Password</label>
+          <div class="form-group">
+            <label for="password" class="form-label">Password</label>
+            <div class="relative">
               <input
                 id="password"
                 name="password"
-                type="password"
+                [type]="showPassword ? 'text' : 'password'"
                 [(ngModel)]="loginForm.password"
                 required
-                class="form-input w-full"
+                class="form-input"
                 placeholder="Enter your password"
+                [class.error]="submitted && !loginForm.password"
               />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                (click)="togglePasswordVisibility()"
+              >
+                <i [class]="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
             </div>
-
-            @if (errorMessage()) {
-            <div class="text-error text-sm text-red-500">{{ errorMessage() }}</div>
-            }
-
-            <button type="submit" [disabled]="isLoading()" class="btn btn-primary w-full py-2">
-              @if (isLoading()) {
-              <span class="animate-pulse">Signing in...</span>
-              } @else { Sign In }
-            </button>
-          </form>
-
-          <div class="mt-6 text-center">
-            <p class="text-gray-600">
-              Don't have an account?
-              <button (click)="toggleMode()" class="text-blue-400 hover:underline">Sign up</button>
-            </p>
           </div>
+
+          <div *ngIf="errorMessage()" class="error-message">
+            {{ errorMessage() }}
+          </div>
+
+          <button type="submit" [disabled]="isLoading()" class="btn btn-primary w-full py-2">
+            <span *ngIf="isLoading(); else signInText" class="animate-pulse">Signing in...</span>
+            <ng-template #signInText>Sign In</ng-template>
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-gray-600">
+            Don't have an account?
+            <button (click)="toggleMode()" class="text-blue-400 hover:underline">Sign up</button>
+          </p>
         </div>
       </div>
     </div>
@@ -130,6 +141,8 @@ export class LoginComponent {
   isLoading = signal(false);
   errorMessage = signal('');
   isSignupMode = signal(false);
+  submitted = false;
+  showPassword = false;
 
   constructor(private authService: AuthService, private router: Router) {}
 
@@ -176,5 +189,9 @@ export class LoginComponent {
     this.isSignupMode.set(!this.isSignupMode());
     this.errorMessage.set('');
     this.loginForm = { username: '', password: '' };
+  }
+
+  togglePasswordVisibility(): void {
+    this.showPassword = !this.showPassword;
   }
 }

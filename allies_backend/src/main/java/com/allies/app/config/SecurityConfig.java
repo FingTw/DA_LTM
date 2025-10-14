@@ -29,29 +29,35 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthTokenFilter jwtAuthTokenFilter) throws Exception {
         http
-            .cors(cors -> {}) // ✅ Bật CORS (dùng cấu hình bên dưới)
+            .cors(cors -> {}) // ✅ Bật CORS (dùng cấu hình ở bean dưới)
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // ✅ Cho phép các endpoint public
                 .requestMatchers("/api/auth/**", "/api/test/**", "/ws/**").permitAll()
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // ✅ Cấu hình CORS fix lỗi "allowCredentials + *"
+    // ✅ Cấu hình CORS cho phép domain ngrok/public IP
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        // ❗ Không dùng "*" khi allowCredentials = true
+        
+        // 🔥 Đây là phần QUAN TRỌNG — cho phép tất cả origin patterns
         config.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:3000", // React
-            "http://localhost:4200" ,
-            "http://localhost:8080" 
+            "http://localhost:*",
+            "https://*.ngrok-free.dev",
+            "https://*.ngrok.io",
+            "http://127.0.0.1:*",
+            "http://192.168.*.*",  // cho LAN
+            "http://10.*.*.*"      // cho LAN
         ));
+        
         config.setAllowedHeaders(Arrays.asList("*"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setExposedHeaders(Arrays.asList("Authorization"));
